@@ -24,7 +24,7 @@ var addTunnelCmd = &cobra.Command{
 		local, _ := cmd.Flags().GetInt("local")
 		remote, _ := cmd.Flags().GetInt("remote")
 
-		cfg, err := config.LoadConfig("~/.config/.portbridge/portbridge.yaml")
+		cfg, err := config.LoadConfig(config.ConfigFilePath)
 		if err != nil {
 			ui.PrintError("Failed to load configuration: " + err.Error())
 			return
@@ -46,7 +46,7 @@ var addTunnelCmd = &cobra.Command{
 		profiles.AddTunnel(&profile, newTunnel)
 		(*cfg)[profileName] = profile
 
-		err = config.SaveConfig("~/.config/.portbridge/portbridge.yaml", cfg)
+		err = config.SaveConfig(config.ConfigFilePath, cfg)
 		if err != nil {
 			ui.PrintError("Failed to save configuration: " + err.Error())
 			return

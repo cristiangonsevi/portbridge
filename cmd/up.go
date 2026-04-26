@@ -17,7 +17,7 @@ var upCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		profileName := args[0]
-		cfg, err := config.LoadConfig("~/.config/.portbridge/portbridge.yaml")
+		cfg, err := config.LoadConfig(config.ConfigFilePath)
 		if err != nil {
 			ui.PrintError("Failed to load configuration: " + err.Error())
 			return
