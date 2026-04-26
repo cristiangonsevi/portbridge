@@ -55,7 +55,7 @@ func SaveConfig(filePath string, profiles *map[string]Profile) error {
 		return err
 	}
 
-	err = os.WriteFile(resolvedPath, data, 0644)
+	err = os.WriteFile(resolvedPath, data, 0600)
 	if err != nil {
 		return err
 	}

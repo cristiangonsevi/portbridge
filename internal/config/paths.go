@@ -8,11 +8,26 @@ import (
 
 const (
 	appDirName          = "portbridge"
-	ConfigFilePath      = "/home/cg/.config/.portbridge/portbridge.yaml"
 	legacyConfigName    = "portbridge.yaml"
-	StateFilePath       = "/home/cg/.config/.portbridge/.portbridge-state.json"
 	legacyStateFileName = ".portbridge-state.json"
 )
+
+// ConfigFilePath is the path to the YAML configuration file.
+var ConfigFilePath string
+
+// StateFilePath is the path to the JSON state file.
+var StateFilePath string
+
+func init() {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		homeDir = "."
+	}
+
+	configDir := filepath.Join(homeDir, ".config", appDirName)
+	ConfigFilePath = filepath.Join(configDir, "portbridge.yaml")
+	StateFilePath = filepath.Join(configDir, ".portbridge-state.json")
+}
 
 // DefaultConfigPath returns the conventional Linux/XDG config path.
 func DefaultConfigPath() (string, error) {
@@ -21,10 +36,6 @@ func DefaultConfigPath() (string, error) {
 
 // DefaultStatePath returns the conventional Linux/XDG state path.
 func DefaultStatePath() (string, error) {
-	if stateHome := os.Getenv("XDG_STATE_HOME"); stateHome != "" {
-		return StateFilePath, nil
-	}
-
 	return StateFilePath, nil
 }
 

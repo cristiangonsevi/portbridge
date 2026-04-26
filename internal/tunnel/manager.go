@@ -16,8 +16,6 @@ import (
 	"portbridge/internal/ui"
 )
 
-const stateFileName = config.StateFilePath
-
 type TunnelRecord struct {
 	Profile    string `json:"profile"`
 	Name       string `json:"name"`
@@ -64,7 +62,7 @@ func NewTunnelManager() *TunnelManager {
 	if err == nil {
 		_ = config.EnsureParentDir(resolvedPath)
 		if _, statErr := os.Stat(resolvedPath); os.IsNotExist(statErr) {
-			_ = os.WriteFile(resolvedPath, []byte("{\n  \"tunnels\": {}\n}\n"), 0644)
+			_ = os.WriteFile(resolvedPath, []byte("{\n  \"tunnels\": {}\n}\n"), 0600)
 		}
 	}
 
@@ -116,7 +114,7 @@ func (tm *TunnelManager) saveState(state *tunnelState) error {
 		return err
 	}
 
-	return os.WriteFile(resolvedPath, data, 0644)
+	return os.WriteFile(resolvedPath, data, 0600)
 }
 
 func isPIDRunning(pid int) bool {
@@ -438,7 +436,8 @@ func (tm *TunnelManager) StartTunnel(record TunnelRecord, cmd *exec.Cmd) (string
 	}()
 
 	deadline := time.Now().Add(5 * time.Second)
-	for {
+	for time.Now().Before(deadline) {
+		// Check if the process exited early
 		select {
 		case err := <-waitCh:
 			tm.mutex.Unlock()
@@ -471,14 +470,13 @@ func (tm *TunnelManager) StartTunnel(record TunnelRecord, cmd *exec.Cmd) (string
 			return "started", nil
 		}
 
-		if time.Now().After(deadline) {
-			_ = terminatePID(cmd.Process.Pid)
-			tm.mutex.Unlock()
-			return "", fmt.Errorf("tunnel %s did not open local port %d in time", record.Name, record.LocalPort)
-		}
-
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(200 * time.Millisecond)
 	}
+
+	// Timeout reached
+	_ = terminatePID(cmd.Process.Pid)
+	tm.mutex.Unlock()
+	return "", fmt.Errorf("tunnel %s did not open local port %d in time", record.Name, record.LocalPort)
 }
 
 // StopTunnel stops a running tunnel by profile and tunnel name.
