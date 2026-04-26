@@ -112,10 +112,36 @@ func terminatePID(pid int) error {
 	}
 
 	err := syscall.Kill(pid, syscall.SIGTERM)
-	if err == syscall.ESRCH {
-		return nil
+	if err != nil && err != syscall.ESRCH {
+		return err
 	}
-	return err
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if !isPIDRunning(pid) {
+			return nil
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	err = syscall.Kill(pid, syscall.SIGKILL)
+	if err != nil && err != syscall.ESRCH {
+		return err
+	}
+
+	deadline = time.Now().Add(1 * time.Second)
+	for time.Now().Before(deadline) {
+		if !isPIDRunning(pid) {
+			return nil
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	if isPIDRunning(pid) {
+		return fmt.Errorf("pid %d is still running after SIGTERM/SIGKILL", pid)
+	}
+
+	return nil
 }
 
 func findListeningProcessByPort(port int) (int, string, error) {
@@ -155,15 +181,103 @@ func findListeningProcessByPort(port int) (int, string, error) {
 	return 0, "", nil
 }
 
-func (tm *TunnelManager) cleanupStaleLocked(state *tunnelState) bool {
-	changed := false
+func findActiveSSHPIDForPort(port int) (int, error) {
+	pid, processName, err := findListeningProcessByPort(port)
+	if err != nil {
+		return 0, err
+	}
+
+	if pid > 0 && processName == "ssh" {
+		return pid, nil
+	}
+
+	return 0, nil
+}
+
+// FindActiveTunnelPID returns the active SSH PID listening on a local port.
+func (tm *TunnelManager) FindActiveTunnelPID(localPort int) (int, error) {
+	return findActiveSSHPIDForPort(localPort)
+}
+
+// StopTunnelByPort stops any active SSH tunnel listener on the given local port
+// and removes matching records from persisted state.
+func (tm *TunnelManager) StopTunnelByPort(localPort int) error {
+	tm.mutex.Lock()
+	state, err := tm.loadState()
+	if err != nil {
+		tm.mutex.Unlock()
+		return err
+	}
+
+	changed, err := tm.cleanupStaleLocked(state)
+	if err != nil {
+		tm.mutex.Unlock()
+		return err
+	}
+
 	for key, record := range state.Tunnels {
-		if !isPIDRunning(record.PID) {
+		if record.LocalPort == localPort {
 			delete(state.Tunnels, key)
 			changed = true
 		}
 	}
-	return changed
+
+	if changed {
+		if err := tm.saveState(state); err != nil {
+			tm.mutex.Unlock()
+			return err
+		}
+	}
+	tm.mutex.Unlock()
+
+	pid, err := findActiveSSHPIDForPort(localPort)
+	if err != nil {
+		return err
+	}
+	if pid == 0 {
+		return nil
+	}
+
+	ui.PrintLog(fmt.Sprintf("Stopping active SSH listener on local port %d", localPort))
+
+	if err := terminatePID(pid); err != nil {
+		return err
+	}
+
+	pid, err = findActiveSSHPIDForPort(localPort)
+	if err != nil {
+		return err
+	}
+	if pid > 0 {
+		return fmt.Errorf("local port %d still has an active SSH listener (pid %d)", localPort, pid)
+	}
+
+	return nil
+}
+
+func (tm *TunnelManager) cleanupStaleLocked(state *tunnelState) (bool, error) {
+	changed := false
+
+	for key, record := range state.Tunnels {
+		activePID, err := findActiveSSHPIDForPort(record.LocalPort)
+		if err != nil {
+			return changed, err
+		}
+
+		if activePID > 0 {
+			if record.PID != activePID {
+				record.PID = activePID
+				state.Tunnels[key] = record
+				changed = true
+			}
+			continue
+		}
+
+		delete(state.Tunnels, key)
+		changed = true
+	}
+
+	return changed, nil
 }
 
 // ListProfileTunnels lists active tracked tunnels for a profile.
@@ -176,7 +290,10 @@ func (tm *TunnelManager) ListProfileTunnels(profile string) ([]TunnelRecord, err
 		return nil, err
 	}
 
-	changed := tm.cleanupStaleLocked(state)
+	changed, err := tm.cleanupStaleLocked(state)
+	if err != nil {
+		return nil, err
+	}
 
 	records := make([]TunnelRecord, 0)
 	for _, record := range state.Tunnels {
@@ -203,27 +320,62 @@ func (tm *TunnelManager) StartTunnel(record TunnelRecord, cmd *exec.Cmd) (string
 		return "", err
 	}
 
-	changed := tm.cleanupStaleLocked(state)
+	changed, err := tm.cleanupStaleLocked(state)
+	if err != nil {
+		tm.mutex.Unlock()
+		return "", err
+	}
+
 	key := record.Key()
 
 	if existing, exists := state.Tunnels[key]; exists {
 		if existing.SameConfig(record) {
-			if changed {
-				if err := tm.saveState(state); err != nil {
+			activePID, err := findActiveSSHPIDForPort(record.LocalPort)
+			if err != nil {
+				tm.mutex.Unlock()
+				return "", err
+			}
+
+			if activePID > 0 {
+				if existing.PID != activePID {
+					existing.PID = activePID
+					state.Tunnels[key] = existing
+					changed = true
+				}
+				if changed {
+					if err := tm.saveState(state); err != nil {
+						tm.mutex.Unlock()
+						return "", err
+					}
+				}
+				tm.mutex.Unlock()
+				return "already-running", nil
+			}
+
+			delete(state.Tunnels, key)
+			changed = true
+		} else {
+			ui.PrintWarning(fmt.Sprintf("Tunnel %s changed, restarting with new configuration", record.Name))
+			if err := terminatePID(existing.PID); err != nil {
+				tm.mutex.Unlock()
+				return "", err
+			}
+
+			activePID, err := findActiveSSHPIDForPort(existing.LocalPort)
+			if err != nil {
+				tm.mutex.Unlock()
+				return "", err
+			}
+			if activePID > 0 && activePID != existing.PID {
+				if err := terminatePID(activePID); err != nil {
 					tm.mutex.Unlock()
 					return "", err
 				}
 			}
-			tm.mutex.Unlock()
-			return "already-running", nil
-		}
 
-		ui.PrintWarning(fmt.Sprintf("Tunnel %s changed, restarting with new configuration", record.Name))
-		if err := terminatePID(existing.PID); err != nil {
-			tm.mutex.Unlock()
-			return "", err
+			delete(state.Tunnels, key)
+			changed = true
 		}
-		delete(state.Tunnels, key)
 	}
 
 	pid, processName, err := findListeningProcessByPort(record.LocalPort)
@@ -297,7 +449,11 @@ func (tm *TunnelManager) StopTunnel(profile, name string) error {
 		return err
 	}
 
-	tm.cleanupStaleLocked(state)
+	_, err = tm.cleanupStaleLocked(state)
+	if err != nil {
+		tm.mutex.Unlock()
+		return err
+	}
 
 	key := profile + ":" + name
 	record, exists := state.Tunnels[key]
@@ -320,8 +476,31 @@ func (tm *TunnelManager) StopTunnel(profile, name string) error {
 	ui.PrintLog(fmt.Sprintf("Stopping tunnel %s", name))
 
 	if err := terminatePID(record.PID); err != nil {
-		ui.PrintError(fmt.Sprintf("Tunnel %s failed to stop: %v", name, err))
+		ui.PrintError(fmt.Sprintf("Tunnel %s failed to stop tracked PID %d: %v", name, record.PID, err))
 		return err
+	}
+
+	activePID, err := findActiveSSHPIDForPort(record.LocalPort)
+	if err != nil {
+		ui.PrintError(fmt.Sprintf("Tunnel %s stop verification failed: %v", name, err))
+		return err
+	}
+
+	if activePID > 0 && activePID != record.PID {
+		ui.PrintWarning(fmt.Sprintf("Tunnel %s had a different active SSH PID %d on port %d, terminating it", name, activePID, record.LocalPort))
+		if err := terminatePID(activePID); err != nil {
+			ui.PrintError(fmt.Sprintf("Tunnel %s failed to stop active PID %d: %v", name, activePID, err))
+			return err
+		}
+	}
+
+	activePID, err = findActiveSSHPIDForPort(record.LocalPort)
+	if err != nil {
+		ui.PrintError(fmt.Sprintf("Tunnel %s final stop verification failed: %v", name, err))
+		return err
+	}
+	if activePID > 0 {
+		return fmt.Errorf("tunnel %s still has an active SSH listener on port %d (pid %d)", name, record.LocalPort, activePID)
 	}
 
 	ui.PrintWarning(fmt.Sprintf("Tunnel %s terminated", name))

@@ -3,6 +3,7 @@ package cmd
 import (
 	"portbridge/internal/config"
 	"portbridge/internal/profiles"
+	"portbridge/internal/tunnel"
 	"portbridge/internal/ui"
 
 	"github.com/spf13/cobra"
@@ -34,12 +35,44 @@ var disableTunnelCmd = &cobra.Command{
 			return
 		}
 
+		localPort := 0
+		found := false
+		for _, existingTunnel := range profile.Tunnels {
+			if existingTunnel.Name == name {
+				localPort = existingTunnel.Local
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			ui.PrintError("Tunnel not found: " + name)
+			return
+		}
+
 		profiles.DisableTunnel(&profile, name)
 		(*cfg)[profileName] = profile
 
 		err = config.SaveConfig("portbridge.yaml", cfg)
 		if err != nil {
 			ui.PrintError("Failed to save configuration: " + err.Error())
+			return
+		}
+
+		manager := tunnel.NewTunnelManager()
+		pid, err := manager.FindActiveTunnelPID(localPort)
+		if err != nil {
+			ui.PrintError("Disabled tunnel in config, but failed to inspect runtime state: " + err.Error())
+			return
+		}
+
+		if pid > 0 {
+			if err := manager.StopTunnelByPort(localPort); err != nil {
+				ui.PrintError("Disabled tunnel in config, but failed to stop running tunnel: " + err.Error())
+				return
+			}
+
+			ui.PrintSuccess("Disabled tunnel " + name + " in profile " + profileName + " and stopped the active tunnel")
 			return
 		}
 

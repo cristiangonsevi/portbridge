@@ -30,25 +30,20 @@ var statusCmd = &cobra.Command{
 		}
 
 		manager := tunnel.NewTunnelManager()
-		activeRecords, err := manager.ListProfileTunnels(profileName)
-		if err != nil {
-			ui.PrintError("Failed to load tunnel state: " + err.Error())
-			return
-		}
-
-		running := make(map[string]tunnel.TunnelRecord)
-		for _, record := range activeRecords {
-			running[record.Name] = record
-		}
 
 		for _, t := range profile.Tunnels {
-			status := "inactive"
-			if record, ok := running[t.Name]; ok {
-				status = "active"
-				ui.PrintInfo(t.Name + ": " + status + " (pid " + strconv.Itoa(record.PID) + ")")
+			pid, err := manager.FindActiveTunnelPID(t.Local)
+			if err != nil {
+				ui.PrintError("Failed to inspect tunnel " + t.Name + ": " + err.Error())
 				continue
 			}
-			ui.PrintInfo(t.Name + ": " + status)
+
+			if pid > 0 {
+				ui.PrintInfo(t.Name + ": active (pid " + strconv.Itoa(pid) + ")")
+				continue
+			}
+
+			ui.PrintInfo(t.Name + ": inactive")
 		}
 	},
 }
