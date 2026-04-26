@@ -1,8 +1,11 @@
 package cmd
 
 import (
+	"fmt"
+
 	"portbridge/internal/config"
 	"portbridge/internal/profiles"
+	"portbridge/internal/tunnel"
 	"portbridge/internal/ui"
 
 	"github.com/spf13/cobra"
@@ -34,6 +37,21 @@ var enableTunnelCmd = &cobra.Command{
 			return
 		}
 
+		selectedTunnel := config.Tunnel{}
+		found := false
+		for _, existingTunnel := range profile.Tunnels {
+			if existingTunnel.Name == name {
+				selectedTunnel = existingTunnel
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			ui.PrintError("Tunnel not found: " + name)
+			return
+		}
+
 		profiles.EnableTunnel(&profile, name)
 		(*cfg)[profileName] = profile
 
@@ -43,7 +61,38 @@ var enableTunnelCmd = &cobra.Command{
 			return
 		}
 
-		ui.PrintSuccess("Enabled tunnel " + name + " in profile " + profileName)
+		target := profile.Host
+		if profile.SSHAlias != "" {
+			target = profile.SSHAlias
+		}
+
+		manager := tunnel.NewTunnelManager()
+		record := tunnel.TunnelRecord{
+			Profile:    profileName,
+			Name:       name,
+			SSHAlias:   profile.SSHAlias,
+			Host:       profile.Host,
+			User:       profile.User,
+			Port:       profile.Port,
+			LocalPort:  selectedTunnel.Local,
+			RemotePort: selectedTunnel.Remote,
+		}
+
+		ui.PrintLog(fmt.Sprintf("Opening tunnel %s: localhost:%d -> %s:%d", name, selectedTunnel.Local, target, selectedTunnel.Remote))
+
+		sshCmd := tunnel.BuildSSHCommand(profile.SSHAlias, profile.User, profile.Host, profile.Port, selectedTunnel.Local, selectedTunnel.Remote)
+		result, err := manager.StartTunnel(record, sshCmd)
+		if err != nil {
+			ui.PrintError("Enabled tunnel in config, but failed to start runtime tunnel: " + err.Error())
+			return
+		}
+
+		if result == "already-running" {
+			ui.PrintWarning("Enabled tunnel " + name + " in profile " + profileName + ", tunnel was already running")
+			return
+		}
+
+		ui.PrintSuccess("Enabled tunnel " + name + " in profile " + profileName + " and started the active tunnel")
 	},
 }
 
