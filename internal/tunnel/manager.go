@@ -415,29 +415,48 @@ func (tm *TunnelManager) StartTunnel(record TunnelRecord, cmd *exec.Cmd) (string
 		waitCh <- cmd.Wait()
 	}()
 
-	select {
-	case err := <-waitCh:
-		tm.mutex.Unlock()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		select {
+		case err := <-waitCh:
+			tm.mutex.Unlock()
+			if err != nil {
+				ui.PrintError(fmt.Sprintf("Tunnel %s failed during startup: %v", record.Name, err))
+				return "", err
+			}
+			ui.PrintError(fmt.Sprintf("Tunnel %s exited during startup", record.Name))
+			return "", fmt.Errorf("tunnel %s exited during startup", record.Name)
+		default:
+		}
+
+		activePID, err := findActiveSSHPIDForPort(record.LocalPort)
 		if err != nil {
-			ui.PrintError(fmt.Sprintf("Tunnel %s failed during startup: %v", record.Name, err))
+			tm.mutex.Unlock()
 			return "", err
 		}
-		ui.PrintError(fmt.Sprintf("Tunnel %s exited during startup", record.Name))
-		return "", fmt.Errorf("tunnel %s exited during startup", record.Name)
-	case <-time.After(1500 * time.Millisecond):
+
+		if activePID > 0 {
+			record.PID = activePID
+			state.Tunnels[key] = record
+
+			if err := tm.saveState(state); err != nil {
+				tm.mutex.Unlock()
+				return "", err
+			}
+			tm.mutex.Unlock()
+
+			ui.PrintLog(fmt.Sprintf("Tunnel %s started with PID %d", record.Name, record.PID))
+			return "started", nil
+		}
+
+		if time.Now().After(deadline) {
+			_ = terminatePID(cmd.Process.Pid)
+			tm.mutex.Unlock()
+			return "", fmt.Errorf("tunnel %s did not open local port %d in time", record.Name, record.LocalPort)
+		}
+
+		time.Sleep(100 * time.Millisecond)
 	}
-
-	record.PID = cmd.Process.Pid
-	state.Tunnels[key] = record
-
-	if err := tm.saveState(state); err != nil {
-		tm.mutex.Unlock()
-		return "", err
-	}
-	tm.mutex.Unlock()
-
-	ui.PrintLog(fmt.Sprintf("Tunnel %s started with PID %d", record.Name, record.PID))
-	return "started", nil
 }
 
 // StopTunnel stops a running tunnel by profile and tunnel name.
