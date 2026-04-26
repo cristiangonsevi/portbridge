@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	appDirName          = "portbridge"
+	appDirName          = ".portbridge"
 	legacyConfigName    = "portbridge.yaml"
 	legacyStateFileName = ".portbridge-state.json"
 )
