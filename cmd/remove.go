@@ -15,12 +15,25 @@ var removeCmd = &cobra.Command{
 }
 
 var removeTunnelCmd = &cobra.Command{
-	Use:   "tunnel [profile]",
+	Use:   "tunnel [profile] [name]",
 	Short: "Remove a tunnel from a profile",
-	Args:  cobra.ExactArgs(1),
+	Args:  cobra.RangeArgs(1, 2),
 	Run: func(cmd *cobra.Command, args []string) {
 		profileName := args[0]
 		name, _ := cmd.Flags().GetString("name")
+
+		if len(args) == 2 {
+			if name != "" && name != args[1] {
+				ui.PrintError("Tunnel name provided in args and --name does not match")
+				return
+			}
+			name = args[1]
+		}
+
+		if name == "" {
+			ui.PrintError("Tunnel name is required. Use 'portbridge remove tunnel <profile> <name>' or '--name <name>'")
+			return
+		}
 
 		cfg, err := config.LoadConfig("portbridge.yaml")
 		if err != nil {
@@ -31,6 +44,19 @@ var removeTunnelCmd = &cobra.Command{
 		profile, exists := (*cfg)[profileName]
 		if !exists {
 			ui.PrintError("Profile not found: " + profileName)
+			return
+		}
+
+		found := false
+		for _, existingTunnel := range profile.Tunnels {
+			if existingTunnel.Name == name {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			ui.PrintError("Tunnel not found: " + name)
 			return
 		}
 
@@ -49,7 +75,6 @@ var removeTunnelCmd = &cobra.Command{
 
 func init() {
 	removeTunnelCmd.Flags().String("name", "", "Tunnel name")
-	removeTunnelCmd.MarkFlagRequired("name")
 
 	removeCmd.AddCommand(removeTunnelCmd)
 	RootCmd.AddCommand(removeCmd)
