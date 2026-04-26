@@ -9,9 +9,9 @@ import (
 
 const (
 	appDirName          = "portbridge"
-	configFileName      = "portbridge.yaml"
+	configFileName      = "~/.config/.portbridge/portbridge.yaml"
 	legacyConfigName    = "portbridge.yaml"
-	stateFileName       = ".portbridge-state.json"
+	stateFileName       = "~/.config/.portbridge/.portbridge-state.json"
 	legacyStateFileName = ".portbridge-state.json"
 )
 
