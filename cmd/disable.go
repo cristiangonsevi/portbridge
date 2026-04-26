@@ -23,7 +23,7 @@ var disableTunnelCmd = &cobra.Command{
 		profileName := args[0]
 		name, _ := cmd.Flags().GetString("name")
 
-		cfg, err := config.LoadConfig("portbridge.yaml")
+		cfg, err := config.LoadConfig("~/.config/.portbridge/portbridge.yaml")
 		if err != nil {
 			ui.PrintError("Failed to load configuration: " + err.Error())
 			return
@@ -53,7 +53,7 @@ var disableTunnelCmd = &cobra.Command{
 		profiles.DisableTunnel(&profile, name)
 		(*cfg)[profileName] = profile
 
-		err = config.SaveConfig("portbridge.yaml", cfg)
+		err = config.SaveConfig("~/.config/.portbridge/portbridge.yaml", cfg)
 		if err != nil {
 			ui.PrintError("Failed to save configuration: " + err.Error())
 			return

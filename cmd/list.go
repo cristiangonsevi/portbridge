@@ -12,7 +12,7 @@ var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all profiles",
 	Run: func(cmd *cobra.Command, args []string) {
-		config, err := config.LoadConfig("portbridge.yaml")
+		config, err := config.LoadConfig("~/.config/.portbridge/portbridge.yaml")
 		if err != nil {
 			ui.PrintError("Failed to load configuration: " + err.Error())
 			return

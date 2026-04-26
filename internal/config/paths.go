@@ -9,26 +9,21 @@ import (
 
 const (
 	appDirName          = "portbridge"
-	configFileName      = "~/.config/.portbridge/portbridge.yaml"
+	ConfigFilePath      = "/home/cg/.config/.portbridge/portbridge.yaml"
 	legacyConfigName    = "portbridge.yaml"
-	stateFileName       = "~/.config/.portbridge/.portbridge-state.json"
+	StateFilePath       = "/home/cg/.config/.portbridge/.portbridge-state.json"
 	legacyStateFileName = ".portbridge-state.json"
 )
 
 // DefaultConfigPath returns the conventional Linux/XDG config path.
 func DefaultConfigPath() (string, error) {
-	baseDir, err := os.UserConfigDir()
-	if err != nil {
-		return "", fmt.Errorf("resolve user config dir: %w", err)
-	}
-
-	return filepath.Join(baseDir, appDirName, configFileName), nil
+	return ConfigFilePath, nil
 }
 
 // DefaultStatePath returns the conventional Linux/XDG state path.
 func DefaultStatePath() (string, error) {
 	if stateHome := os.Getenv("XDG_STATE_HOME"); stateHome != "" {
-		return filepath.Join(stateHome, appDirName, stateFileName), nil
+		return StateFilePath, nil
 	}
 
 	homeDir, err := os.UserHomeDir()
@@ -36,12 +31,12 @@ func DefaultStatePath() (string, error) {
 		return "", fmt.Errorf("resolve user home dir: %w", err)
 	}
 
-	return filepath.Join(homeDir, ".local", "state", appDirName, stateFileName), nil
+	return filepath.Join(homeDir, ".local", "state", appDirName, StateFilePath), nil
 }
 
 // ResolveConfigPath resolves the config path and migrates a legacy local file if needed.
 func ResolveConfigPath(filePath string) (string, error) {
-	if filePath != "" && filePath != configFileName {
+	if filePath != "" && filePath != ConfigFilePath {
 		return filePath, nil
 	}
 
@@ -59,7 +54,7 @@ func ResolveConfigPath(filePath string) (string, error) {
 
 // ResolveStatePath resolves the state path and migrates a legacy local file if needed.
 func ResolveStatePath(filePath string) (string, error) {
-	if filePath != "" && filePath != stateFileName {
+	if filePath != "" && filePath != StateFilePath {
 		return filePath, nil
 	}
 
