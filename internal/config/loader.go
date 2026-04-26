@@ -12,7 +12,12 @@ type FileConfig struct {
 
 // LoadConfig loads the configuration from a YAML file
 func LoadConfig(filePath string) (*map[string]Profile, error) {
-	data, err := os.ReadFile(filePath)
+	resolvedPath, err := ResolveConfigPath(filePath)
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := os.ReadFile(resolvedPath)
 	if err != nil {
 		return nil, err
 	}
@@ -32,6 +37,15 @@ func LoadConfig(filePath string) (*map[string]Profile, error) {
 
 // SaveConfig saves the configuration to a YAML file
 func SaveConfig(filePath string, profiles *map[string]Profile) error {
+	resolvedPath, err := ResolveConfigPath(filePath)
+	if err != nil {
+		return err
+	}
+
+	if err := EnsureParentDir(resolvedPath); err != nil {
+		return err
+	}
+
 	cfg := FileConfig{
 		Profiles: *profiles,
 	}
@@ -41,7 +55,7 @@ func SaveConfig(filePath string, profiles *map[string]Profile) error {
 		return err
 	}
 
-	err = os.WriteFile(filePath, data, 0644)
+	err = os.WriteFile(resolvedPath, data, 0644)
 	if err != nil {
 		return err
 	}

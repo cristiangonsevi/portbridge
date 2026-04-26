@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"portbridge/internal/config"
 	"portbridge/internal/ui"
 )
 
@@ -55,13 +56,28 @@ type TunnelManager struct {
 
 // NewTunnelManager creates a new TunnelManager.
 func NewTunnelManager() *TunnelManager {
-	return &TunnelManager{
+	manager := &TunnelManager{
 		statePath: stateFileName,
 	}
+
+	resolvedPath, err := config.ResolveStatePath(manager.statePath)
+	if err == nil {
+		_ = config.EnsureParentDir(resolvedPath)
+		if _, statErr := os.Stat(resolvedPath); os.IsNotExist(statErr) {
+			_ = os.WriteFile(resolvedPath, []byte("{\n  \"tunnels\": {}\n}\n"), 0644)
+		}
+	}
+
+	return manager
 }
 
 func (tm *TunnelManager) loadState() (*tunnelState, error) {
-	data, err := os.ReadFile(tm.statePath)
+	resolvedPath, err := config.ResolveStatePath(tm.statePath)
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := os.ReadFile(resolvedPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return &tunnelState{Tunnels: make(map[string]TunnelRecord)}, nil
@@ -82,11 +98,17 @@ func (tm *TunnelManager) loadState() (*tunnelState, error) {
 }
 
 func (tm *TunnelManager) saveState(state *tunnelState) error {
-	if len(state.Tunnels) == 0 {
-		if err := os.Remove(tm.statePath); err != nil && !os.IsNotExist(err) {
-			return err
-		}
-		return nil
+	resolvedPath, err := config.ResolveStatePath(tm.statePath)
+	if err != nil {
+		return err
+	}
+
+	if state.Tunnels == nil {
+		state.Tunnels = make(map[string]TunnelRecord)
+	}
+
+	if err := config.EnsureParentDir(resolvedPath); err != nil {
+		return err
 	}
 
 	data, err := json.MarshalIndent(state, "", "  ")
@@ -94,7 +116,7 @@ func (tm *TunnelManager) saveState(state *tunnelState) error {
 		return err
 	}
 
-	return os.WriteFile(tm.statePath, data, 0644)
+	return os.WriteFile(resolvedPath, data, 0644)
 }
 
 func isPIDRunning(pid int) bool {
