@@ -78,7 +78,7 @@ var upCmd = &cobra.Command{
 				RemotePort: t.Remote,
 			}
 
-			sshCmd := tunnel.BuildSSHCommand(profile.SSHAlias, profile.User, profile.Host, profile.Port, t.Local, t.Remote)
+			sshCmd := tunnel.BuildSSHCommand(profile.SSHAlias, profile.User, profile.Host, profile.Password, profile.Port, t.Local, t.Remote)
 			result, err := manager.StartTunnel(record, sshCmd)
 			if err != nil {
 				ui.PrintError("Failed to start tunnel " + t.Name + ": " + err.Error())

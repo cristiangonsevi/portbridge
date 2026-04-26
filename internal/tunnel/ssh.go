@@ -11,7 +11,7 @@ import (
 
 // BuildSSHCommand builds the SSH command for a tunnel.
 // It validates ports and sanitizes inputs to prevent command injection.
-func BuildSSHCommand(sshAlias, user, host string, port, localPort, remotePort int) *exec.Cmd {
+func BuildSSHCommand(sshAlias, user, host, password string, port, localPort, remotePort int) *exec.Cmd {
 	// Validate ports
 	if err := config.ValidatePort(localPort); err != nil {
 		return errorCommand(fmt.Sprintf("invalid local port: %v", err))
@@ -27,6 +27,15 @@ func BuildSSHCommand(sshAlias, user, host string, port, localPort, remotePort in
 		if containsShellMetachar(sshAlias) {
 			return errorCommand("ssh alias contains invalid characters")
 		}
+
+		if password != "" {
+			// Use sshpass to provide the password non-interactively
+			if containsShellMetachar(password) {
+				return errorCommand("password contains invalid characters")
+			}
+			return exec.Command("sshpass", "-p", password, "ssh", "-N", "-L", forward, sshAlias)
+		}
+
 		return exec.Command("ssh", "-N", "-L", forward, sshAlias)
 	}
 
@@ -47,6 +56,18 @@ func BuildSSHCommand(sshAlias, user, host string, port, localPort, remotePort in
 		}
 		args = append(args, "-p", strconv.Itoa(port))
 	}
+
+	if password != "" {
+		// Use sshpass to provide the password non-interactively
+		if containsShellMetachar(password) {
+			return errorCommand("password contains invalid characters")
+		}
+		if user == "" && host == "" {
+			return errorCommand("password requires either ssh_alias or user/host")
+		}
+		return exec.Command("sshpass", "-p", password, "ssh", "-N", "-L", forward, target)
+	}
+
 	args = append(args, target)
 
 	return exec.Command("ssh", args...)

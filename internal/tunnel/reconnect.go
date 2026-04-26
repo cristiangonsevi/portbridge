@@ -80,7 +80,7 @@ func (rm *ReconnectManager) checkAndRestartTunnels() {
 				RemotePort: t.Remote,
 			}
 
-			sshCmd := BuildSSHCommand(profile.SSHAlias, profile.User, profile.Host, profile.Port, t.Local, t.Remote)
+			sshCmd := BuildSSHCommand(profile.SSHAlias, profile.User, profile.Host, profile.Password, profile.Port, t.Local, t.Remote)
 			_, err = rm.manager.StartTunnel(record, sshCmd)
 			if err != nil {
 				ui.PrintError(fmt.Sprintf("Reconnect: failed to restart tunnel %s/%s: %v", profileName, t.Name, err))

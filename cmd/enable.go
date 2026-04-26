@@ -80,7 +80,7 @@ var enableTunnelCmd = &cobra.Command{
 
 		ui.PrintLog(fmt.Sprintf("Opening tunnel %s: localhost:%d -> %s:%d", name, selectedTunnel.Local, target, selectedTunnel.Remote))
 
-		sshCmd := tunnel.BuildSSHCommand(profile.SSHAlias, profile.User, profile.Host, profile.Port, selectedTunnel.Local, selectedTunnel.Remote)
+		sshCmd := tunnel.BuildSSHCommand(profile.SSHAlias, profile.User, profile.Host, profile.Password, profile.Port, selectedTunnel.Local, selectedTunnel.Remote)
 		result, err := manager.StartTunnel(record, sshCmd)
 		if err != nil {
 			ui.PrintError("Enabled tunnel in config, but failed to start runtime tunnel: " + err.Error())
