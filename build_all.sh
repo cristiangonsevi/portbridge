@@ -20,7 +20,7 @@ for TARGET in "${TARGETS[@]}"; do
   [ "$OS" == "windows" ] && OUTPUT_NAME+=".exe"
 
   echo "Building for $OS/$ARCH..."
-  GOOS="$OS" GOARCH="$ARCH" go build -o "$OUTPUT_DIR/$OUTPUT_NAME" ./cmd
+  GOOS="$OS" GOARCH="$ARCH" go build -o "$OUTPUT_DIR/$OUTPUT_NAME" .
 done
 
 echo "Builds completed. Binaries are in the '$OUTPUT_DIR' directory."
