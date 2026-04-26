@@ -1,7 +1,6 @@
 package config
 
 import (
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -26,12 +25,7 @@ func DefaultStatePath() (string, error) {
 		return StateFilePath, nil
 	}
 
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("resolve user home dir: %w", err)
-	}
-
-	return filepath.Join(homeDir, ".local", "state", appDirName, StateFilePath), nil
+	return StateFilePath, nil
 }
 
 // ResolveConfigPath resolves the config path and migrates a legacy local file if needed.

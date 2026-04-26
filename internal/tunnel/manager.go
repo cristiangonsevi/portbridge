@@ -16,7 +16,7 @@ import (
 	"portbridge/internal/ui"
 )
 
-const stateFileName = ".portbridge-state.json"
+const stateFileName = config.StateFilePath
 
 type TunnelRecord struct {
 	Profile    string `json:"profile"`
@@ -57,7 +57,7 @@ type TunnelManager struct {
 // NewTunnelManager creates a new TunnelManager.
 func NewTunnelManager() *TunnelManager {
 	manager := &TunnelManager{
-		statePath: stateFileName,
+		statePath: config.StateFilePath,
 	}
 
 	resolvedPath, err := config.ResolveStatePath(manager.statePath)
