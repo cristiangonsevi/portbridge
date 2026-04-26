@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"strconv"
+
 	"portbridge/internal/config"
 	"portbridge/internal/tunnel"
 	"portbridge/internal/ui"
@@ -28,17 +30,23 @@ var statusCmd = &cobra.Command{
 		}
 
 		manager := tunnel.NewTunnelManager()
-		running := manager.ListTunnels()
+		activeRecords, err := manager.ListProfileTunnels(profileName)
+		if err != nil {
+			ui.PrintError("Failed to load tunnel state: " + err.Error())
+			return
+		}
+
+		running := make(map[string]tunnel.TunnelRecord)
+		for _, record := range activeRecords {
+			running[record.Name] = record
+		}
 
 		for _, t := range profile.Tunnels {
 			status := "inactive"
-			if t.Enabled {
-				for _, name := range running {
-					if name == t.Name {
-						status = "active"
-						break
-					}
-				}
+			if record, ok := running[t.Name]; ok {
+				status = "active"
+				ui.PrintInfo(t.Name + ": " + status + " (pid " + strconv.Itoa(record.PID) + ")")
+				continue
 			}
 			ui.PrintInfo(t.Name + ": " + status)
 		}
