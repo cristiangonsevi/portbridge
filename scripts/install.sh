@@ -4,10 +4,10 @@
 # Downloads the latest PortBridge binary from GitHub Releases for your platform.
 #
 # Usage:
-#   ./scripts/install.sh              # Download and install to /usr/local/bin
-#   ./scripts/install.sh --prefix ~/.local/bin  # Install to custom path
-#   ./scripts/install.sh --version v1.0.0       # Install a specific version
-#   ./scripts/install.sh --dry-run              # Show what would be done
+#   ./scripts/install.sh                       # Install to ~/.local/bin
+#   ./scripts/install.sh --prefix ~/.local/bin # Install to custom path
+#   ./scripts/install.sh --version v1.0.0      # Install a specific version
+#   ./scripts/install.sh --dry-run             # Show what would be done
 #
 
 set -euo pipefail
@@ -26,7 +26,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # ─── Defaults ──────────────────────────────────────────────────────────────
-INSTALL_PREFIX="/usr/local/bin"
+INSTALL_PREFIX="${HOME}/.local/bin"
 VERSION="latest"
 DRY_RUN=false
 
@@ -49,7 +49,7 @@ while [[ $# -gt 0 ]]; do
       echo "Usage: $0 [OPTIONS]"
       echo ""
       echo "Options:"
-      echo "  --prefix <path>       Install binary to <path> (default: /usr/local/bin)"
+      echo "  --prefix <path>       Install binary to <path> (default: ~/.local/bin)"
       echo "  --version <tag>       Install a specific version/tag (default: latest)"
       echo "  --dry-run             Show what would be done without actually installing"
       echo "  --help, -h            Show this help message"
@@ -61,7 +61,11 @@ while [[ $# -gt 0 ]]; do
       echo "Examples:"
       echo "  REPO_OWNER=myuser REPO_NAME=portbridge $0"
       echo "  $0 --version v0.1.0"
-      echo "  $0 --prefix ~/.local/bin"
+      echo "  $0 --prefix /usr/local/bin"
+      echo ""
+      echo "Note: The default install prefix is ~/.local/bin so no sudo is needed."
+      echo "      If you install to a system directory (e.g. /usr/local/bin),"
+      echo "      you may need to run with sudo."
       exit 0
       ;;
     *)
@@ -181,7 +185,7 @@ echo ""
 echo -e "${YELLOW}━━━ Step 4: Downloading binary ─━━${NC}"
 echo ""
 
-# Normalize platform name to match build_all.sh naming: portbridge-<os>-<arch>
+# Normalize platform name: portbridge-<os>-<arch>
 OS="${PLATFORM%-*}"
 ARCH="${PLATFORM#*-}"
 BINARY_NAME="portbridge-${OS}-${ARCH}"
@@ -234,22 +238,17 @@ else
   INSTALL_DIR="$INSTALL_PREFIX"
 
   if [ ! -d "$INSTALL_DIR" ]; then
-    warn "Directory $INSTALL_DIR does not exist. Creating it..."
-    if ! mkdir -p "$INSTALL_DIR" 2>/dev/null; then
-      fail "Cannot create $INSTALL_DIR. Try using sudo or specify a different prefix:"
-      fail "  sudo $0"
-      fail "  $0 --prefix ~/.local/bin"
-      rm -rf "$TEMP_DIR"
-      exit 1
-    fi
+    info "Creating directory $INSTALL_DIR..."
+    mkdir -p "$INSTALL_DIR"
   fi
 
   if cp "$TEMP_BIN" "$INSTALL_DIR/portbridge" 2>/dev/null; then
     chmod +x "$INSTALL_DIR/portbridge"
     ok "Installed to: $INSTALL_DIR/portbridge"
   else
-    fail "Failed to install to $INSTALL_DIR. Try using sudo:"
-    fail "  sudo $0"
+    fail "Failed to install to $INSTALL_DIR. Check write permissions."
+    fail "You can specify a different directory with --prefix:"
+    fail "  $0 --prefix ~/bin"
     rm -rf "$TEMP_DIR"
     exit 1
   fi
@@ -263,7 +262,15 @@ else
       ;;
     *)
       warn "$INSTALL_DIR is NOT in your PATH. Add it to your shell config:"
-      warn "  export PATH=\"\$PATH:$INSTALL_DIR\""
+      warn ""
+      warn "  For bash:"
+      warn "    echo 'export PATH=\"\$PATH:$INSTALL_DIR\"' >> ~/.bashrc"
+      warn ""
+      warn "  For zsh (macOS default):"
+      warn "    echo 'export PATH=\"\$PATH:$INSTALL_DIR\"' >> ~/.zshrc"
+      warn ""
+      warn "  Then reload:"
+      warn "    source ~/.bashrc   # or ~/.zshrc"
       ;;
   esac
 fi
