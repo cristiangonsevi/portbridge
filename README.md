@@ -1,6 +1,6 @@
 # 🚀 PortBridge
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/yourusername/portbridge)](https://goreportcard.com/report/github.com/yourusername/portbridge)
+[![Go Report Card](https://goreportcard.com/badge/github.com/cristiangonsevi/portbridge)](https://goreportcard.com/report/github.com/cristangonsevi/portbridge)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 <!-- Add more badges as needed -->
 
@@ -331,8 +331,6 @@ PortBridge fixes that by making tunnels:
 
 ## 🏗️ Project Structure (Go)
 
-Recommended structure for scalability:
-
 ```
 portbridge/
 ├── cmd/
@@ -419,8 +417,8 @@ PRs are welcome!
 
 ## 📬 Contact & Support
 
-- Issues: [GitHub Issues](https://github.com/yourusername/portbridge/issues)
-- Email: your@email.com
+- Issues: [GitHub Issues](https://github.com/cristiangonsevi/portbridge/issues)
+- Email: cgonsevi@gmail.com
 
 ---
 
