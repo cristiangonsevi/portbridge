@@ -20,7 +20,7 @@
 
 ```bash
 # Install (Linux/macOS)
-curl -fsSL https://tuapp.dev/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/cristiangonsevi/portbridge/refs/heads/master/scripts/install.sh | sh
 
 # Start a profile
 portbridge up qa
@@ -61,7 +61,7 @@ No more long `ssh -L` commands. No more remembering ports.
 - Linux, macOS (Windows support planned)
 
 ```bash
-curl -fsSL https://tuapp.dev/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/cristiangonsevi/portbridge/refs/heads/master/scripts/install.sh | sh
 ```
 
 ---
@@ -360,7 +360,6 @@ portbridge/
 │   ├── ui/
 │   │   ├── output.go
 │
-├── pkg/ (optional public APIs)
 │
 ├── main.go
 ├── go.mod
