@@ -2,6 +2,10 @@ package cmd
 
 import (
 	"fmt"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"portbridge/internal/config"
 	"portbridge/internal/tunnel"
@@ -92,6 +96,23 @@ var upCmd = &cobra.Command{
 
 			ui.PrintSuccess("Started tunnel " + t.Name)
 		}
+
+		reconnectMgr := tunnel.NewReconnectManager(manager)
+		interval := time.Duration(profile.ReconnectInterval) * time.Second
+		if interval <= 0 {
+			interval = 30 * time.Second
+		}
+		go reconnectMgr.MonitorTunnels(interval)
+		ui.PrintLog(fmt.Sprintf("Reconnect monitor started with interval %v", interval))
+
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+		go func() {
+			<-sigCh
+			ui.PrintLog("Received signal, shutting down...")
+			reconnectMgr.Stop()
+			os.Exit(0)
+		}()
 	},
 }
 

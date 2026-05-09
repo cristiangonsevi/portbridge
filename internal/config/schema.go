@@ -16,13 +16,14 @@ type Tunnel struct {
 
 // Profile represents a profile configuration
 type Profile struct {
-	SSHAlias string   `yaml:"ssh_alias,omitempty"`
-	Host     string   `yaml:"host,omitempty"`
-	Port     int      `yaml:"port,omitempty"`
-	User     string   `yaml:"user,omitempty"`
-	Password string   `yaml:"password,omitempty"`
-	SSHKey   string   `yaml:"ssh_key_file,omitempty"`
-	Tunnels  []Tunnel `yaml:"tunnels"`
+	SSHAlias          string   `yaml:"ssh_alias,omitempty"`
+	Host              string   `yaml:"host,omitempty"`
+	Port              int      `yaml:"port,omitempty"`
+	User              string   `yaml:"user,omitempty"`
+	Password          string   `yaml:"password,omitempty"`
+	SSHKey            string   `yaml:"ssh_key_file,omitempty"`
+	ReconnectInterval int      `yaml:"reconnect_interval,omitempty"`
+	Tunnels           []Tunnel `yaml:"tunnels"`
 }
 
 // ValidatePort checks if a port number is valid (1-65535).

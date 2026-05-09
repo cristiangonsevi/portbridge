@@ -11,30 +11,37 @@ import (
 // ReconnectManager handles auto-reconnection of tunnels.
 type ReconnectManager struct {
 	manager *TunnelManager
+	stopCh  chan struct{}
 }
 
 // NewReconnectManager creates a new ReconnectManager.
 func NewReconnectManager(manager *TunnelManager) *ReconnectManager {
 	return &ReconnectManager{
 		manager: manager,
+		stopCh:  make(chan struct{}),
 	}
 }
 
 // MonitorTunnels periodically checks all tracked tunnels and restarts any that
 // have stopped unexpectedly. It runs until the stop channel is closed.
-func (rm *ReconnectManager) MonitorTunnels(interval time.Duration, stopCh <-chan struct{}) {
+func (rm *ReconnectManager) MonitorTunnels(interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	for {
 		select {
-		case <-stopCh:
+		case <-rm.stopCh:
 			ui.PrintLog("Reconnect monitor stopped")
 			return
 		case <-ticker.C:
 			rm.checkAndRestartTunnels()
 		}
 	}
+}
+
+// Stop stops the reconnect monitor.
+func (rm *ReconnectManager) Stop() {
+	close(rm.stopCh)
 }
 
 // MonitorTunnelsLegacy is a no-op placeholder kept for API compatibility.
@@ -52,6 +59,11 @@ func (rm *ReconnectManager) checkAndRestartTunnels() {
 	}
 
 	for profileName, profile := range *cfg {
+		interval := profile.ReconnectInterval
+		if interval <= 0 {
+			interval = 30
+		}
+
 		for _, t := range profile.Tunnels {
 			if !t.Enabled {
 				continue

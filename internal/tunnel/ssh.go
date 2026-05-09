@@ -9,10 +9,11 @@ import (
 	"portbridge/internal/config"
 )
 
+var keepaliveArgs = []string{"-o", "ServerAliveInterval=60", "-o", "ServerAliveCountMax=3", "-o", "TCPKeepAlive=yes"}
+
 // BuildSSHCommand builds the SSH command for a tunnel.
 // It validates ports and sanitizes inputs to prevent command injection.
 func BuildSSHCommand(sshAlias, user, host, password string, port, localPort, remotePort int) *exec.Cmd {
-	// Validate ports
 	if err := config.ValidatePort(localPort); err != nil {
 		return errorCommand(fmt.Sprintf("invalid local port: %v", err))
 	}
@@ -23,20 +24,24 @@ func BuildSSHCommand(sshAlias, user, host, password string, port, localPort, rem
 	forward := fmt.Sprintf("%d:localhost:%d", localPort, remotePort)
 
 	if sshAlias != "" {
-		// Sanitize: ensure sshAlias doesn't contain dangerous characters
 		if containsShellMetachar(sshAlias) {
 			return errorCommand("ssh alias contains invalid characters")
 		}
 
 		if password != "" {
-			// Use sshpass to provide the password non-interactively
 			if containsShellMetachar(password) {
 				return errorCommand("password contains invalid characters")
 			}
-			return exec.Command("sshpass", "-p", password, "ssh", "-N", "-L", forward, sshAlias)
+			args := []string{"-p", password, "ssh"}
+			args = append(args, keepaliveArgs...)
+			args = append(args, "-N", "-L", forward, sshAlias)
+			return exec.Command("sshpass", args...)
 		}
 
-		return exec.Command("ssh", "-N", "-L", forward, sshAlias)
+		args := []string{"ssh"}
+		args = append(args, keepaliveArgs...)
+		args = append(args, "-N", "-L", forward, sshAlias)
+		return exec.Command(args[0], args[1:]...)
 	}
 
 	target := host
@@ -44,12 +49,12 @@ func BuildSSHCommand(sshAlias, user, host, password string, port, localPort, rem
 		target = fmt.Sprintf("%s@%s", user, host)
 	}
 
-	// Sanitize target
 	if containsShellMetachar(target) {
 		return errorCommand("host or user contains invalid characters")
 	}
 
 	args := []string{"-N", "-L", forward}
+	args = append(args, keepaliveArgs...)
 	if port > 0 {
 		if err := config.ValidatePort(port); err != nil {
 			return errorCommand(fmt.Sprintf("invalid SSH port: %v", err))
@@ -58,14 +63,18 @@ func BuildSSHCommand(sshAlias, user, host, password string, port, localPort, rem
 	}
 
 	if password != "" {
-		// Use sshpass to provide the password non-interactively
 		if containsShellMetachar(password) {
 			return errorCommand("password contains invalid characters")
 		}
 		if user == "" && host == "" {
 			return errorCommand("password requires either ssh_alias or user/host")
 		}
-		return exec.Command("sshpass", "-p", password, "ssh", "-N", "-L", forward, target)
+		sshArgs := []string{"ssh"}
+		sshArgs = append(sshArgs, args...)
+		sshArgs = append(sshArgs, target)
+		args := []string{"-p", password}
+		args = append(args, sshArgs...)
+		return exec.Command("sshpass", args...)
 	}
 
 	args = append(args, target)

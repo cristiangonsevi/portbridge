@@ -72,6 +72,7 @@ curl -fsSL https://raw.githubusercontent.com/cristiangonsevi/portbridge/refs/hea
 profiles:
   qa:
     ssh_alias: my-qa-server
+    reconnect_interval: 30  # seconds between reconnect checks (default: 30)
     tunnels:
       - name: db
         local: 3306
@@ -217,6 +218,7 @@ profiles:
     user: ubuntu
     password: yourpassword # optional (not recommended)
     ssh_key_file: ~/.ssh/id_rsa
+    reconnect_interval: 30  # seconds between reconnect checks (default: 30)
     tunnels:
       - name: db
         local: 3306
@@ -241,13 +243,43 @@ profiles:
 
 ## 🔁 Auto-reconnect
 
-PortBridge keeps your tunnels alive automatically.
+PortBridge keeps your tunnels alive automatically. If the SSH connection drops, it reconnects and restores all **enabled** tunnels with no manual action required.
 
-If the SSH connection drops:
+### How it works
 
-* it reconnects
-* restores all **enabled** tunnels
-* no manual action required
+* A background monitor checks tunnel health every `reconnect_interval` seconds (default: 30)
+* If a tunnel is detected as down, it automatically restarts the SSH process
+* SSH keepalive options (`ServerAliveInterval=60`, `ServerAliveCountMax=3`, `TCPKeepAlive=yes`) help detect dead connections proactively
+
+### Configuration
+
+```yaml
+profiles:
+  qa:
+    ssh_alias: my-qa-server
+    reconnect_interval: 30  # seconds (default: 30, set to 0 to disable)
+    tunnels:
+      - name: db
+        local: 3306
+        remote: 3306
+        enabled: true
+```
+
+### Disabling auto-reconnect
+
+Set `reconnect_interval: 0` to disable auto-reconnect for a specific profile:
+
+```yaml
+profiles:
+  qa:
+    ssh_alias: my-qa-server
+    reconnect_interval: 0  # disable auto-reconnect
+    tunnels:
+      - name: db
+        local: 3306
+        remote: 3306
+        enabled: true
+```
 
 ---
 
