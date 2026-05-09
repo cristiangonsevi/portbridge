@@ -16,9 +16,10 @@ var disableCmd = &cobra.Command{
 }
 
 var disableTunnelCmd = &cobra.Command{
-	Use:   "tunnel [profile]",
-	Short: "Disable a tunnel in a profile",
-	Args:  cobra.ExactArgs(1),
+	Use:               "tunnel [profile]",
+	Short:             "Disable a tunnel in a profile",
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction:  profileNameCompletionFunc,
 	Run: func(cmd *cobra.Command, args []string) {
 		profileName := args[0]
 		name, _ := cmd.Flags().GetString("name")

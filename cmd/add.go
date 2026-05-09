@@ -15,9 +15,10 @@ var addCmd = &cobra.Command{
 }
 
 var addTunnelCmd = &cobra.Command{
-	Use:   "tunnel [profile]",
-	Short: "Add a new tunnel to a profile",
-	Args:  cobra.ExactArgs(1),
+	Use:               "tunnel [profile]",
+	Short:             "Add a new tunnel to a profile",
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: profileNameCompletionFunc,
 	Run: func(cmd *cobra.Command, args []string) {
 		profileName := args[0]
 		name, _ := cmd.Flags().GetString("name")

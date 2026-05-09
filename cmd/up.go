@@ -19,6 +19,7 @@ var upCmd = &cobra.Command{
 	Use:   "up [profile]",
 	Short: "Start tunnels for a profile",
 	Args:  cobra.ExactArgs(1),
+	ValidArgsFunction: profileNameCompletionFunc,
 	Run: func(cmd *cobra.Command, args []string) {
 		profileName := args[0]
 		cfg, err := config.LoadConfig(config.ConfigFilePath)

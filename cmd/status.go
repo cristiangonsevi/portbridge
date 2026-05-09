@@ -15,6 +15,7 @@ var statusCmd = &cobra.Command{
 	Use:   "status [profile]",
 	Short: "Show the status of tunnels for a profile",
 	Args:  cobra.ExactArgs(1),
+	ValidArgsFunction: profileNameCompletionFunc,
 	Run: func(cmd *cobra.Command, args []string) {
 		profileName := args[0]
 		cfg, err := config.LoadConfig(config.ConfigFilePath)

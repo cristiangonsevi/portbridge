@@ -309,16 +309,41 @@ portbridge <command> [arguments] [flags]
 
 ### Commands
 
-| Command                    | Description       |
-| -------------------------- | ----------------- |
-| `up <profile>`             | Start tunnels     |
-| `down <profile>`           | Stop tunnels      |
-| `status [profile]`         | Show status       |
-| `list`                     | List all profiles |
-| `add tunnel <profile>`     | Add new tunnel    |
-| `remove tunnel <profile>`  | Remove tunnel     |
-| `enable tunnel <profile>`  | Enable tunnel     |
-| `disable tunnel <profile>` | Disable tunnel    |
+| Command                       | Description                    |
+| ----------------------------- | ------------------------------ |
+| `up <profile>`                | Start tunnels                  |
+| `down <profile>`              | Stop tunnels                   |
+| `status [profile]`            | Show status                    |
+| `list`                        | List all profiles              |
+| `add tunnel <profile>`        | Add new tunnel                  |
+| `remove tunnel <profile>`     | Remove tunnel                   |
+| `enable tunnel <profile>`      | Enable tunnel                   |
+| `disable tunnel <profile>`     | Disable tunnel                  |
+| `completion [shell]`          | Generate shell completions     |
+| `version`                     | Show version                   |
+| `validate`                    | Validate configuration         |
+| `showconfig`                  | Show configuration and paths   |
+
+---
+
+### Shell Completions
+
+PortBridge supports auto-completion for profiles and tunnel names.
+
+```bash
+# Setup bash completion (Linux)
+portbridge completion bash > /etc/bash_completion.d/portbridge
+
+# Setup zsh completion
+portbridge completion zsh > "${fpath[1]}/_portbridge"
+
+# Setup fish completion
+portbridge completion fish > ~/.config/fish/completions/portbridge.fish
+
+# After setup, you can Tab-complete:
+# portbridge up <TAB>
+# portbridge enable tunnel qa --name <TAB>
+```
 
 ---
 

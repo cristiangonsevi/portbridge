@@ -15,9 +15,10 @@ var removeCmd = &cobra.Command{
 }
 
 var removeTunnelCmd = &cobra.Command{
-	Use:   "tunnel [profile] [name]",
-	Short: "Remove a tunnel from a profile",
-	Args:  cobra.RangeArgs(1, 2),
+	Use:               "tunnel [profile] [name]",
+	Short:             "Remove a tunnel from a profile",
+	Args:              cobra.RangeArgs(1, 2),
+	ValidArgsFunction:  profileNameCompletionFunc,
 	Run: func(cmd *cobra.Command, args []string) {
 		profileName := args[0]
 		name, _ := cmd.Flags().GetString("name")
