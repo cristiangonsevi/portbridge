@@ -6,6 +6,7 @@ import (
 	"portbridge/internal/config"
 	"portbridge/internal/profiles"
 	"portbridge/internal/tunnel"
+	tunnelssh "portbridge/internal/tunnel/ssh"
 	"portbridge/internal/ui"
 
 	"github.com/spf13/cobra"
@@ -68,6 +69,14 @@ var enableTunnelCmd = &cobra.Command{
 		}
 
 		manager := tunnel.NewTunnelManager()
+
+		sshClient, err := tunnelssh.NewClient(&profile)
+		if err != nil {
+			ui.PrintError("Failed to create SSH client: " + err.Error())
+			return
+		}
+		defer sshClient.Close()
+
 		record := tunnel.TunnelRecord{
 			Profile:    profileName,
 			Name:       name,
@@ -81,8 +90,7 @@ var enableTunnelCmd = &cobra.Command{
 
 		ui.PrintLog(fmt.Sprintf("Opening tunnel %s: localhost:%d -> %s:%d", name, selectedTunnel.Local, target, selectedTunnel.Remote))
 
-		sshCmd := tunnel.BuildSSHCommand(profile.SSHAlias, profile.User, profile.Host, profile.Password, profile.Port, selectedTunnel.Local, selectedTunnel.Remote)
-		result, err := manager.StartTunnel(record, sshCmd)
+		result, err := manager.StartSSHTunnel(record, sshClient.UnderlyingClient(), selectedTunnel.Local, selectedTunnel.Remote)
 		if err != nil {
 			ui.PrintError("Enabled tunnel in config, but failed to start runtime tunnel: " + err.Error())
 			return

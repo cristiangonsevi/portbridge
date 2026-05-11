@@ -14,6 +14,14 @@ type Tunnel struct {
 	Enabled bool   `yaml:"enabled"`
 }
 
+// SSHAuth represents the SSH authentication configuration.
+type SSHAuth struct {
+	Type       string `yaml:"type"`                 // "key" or "password"
+	KeyPath    string `yaml:"key_path,omitempty"`   // path to SSH private key
+	Passphrase string `yaml:"passphrase,omitempty"` // passphrase for the key (optional)
+	Password   string `yaml:"password,omitempty"`   // password for password auth
+}
+
 // Profile represents a profile configuration
 type Profile struct {
 	SSHAlias          string   `yaml:"ssh_alias,omitempty"`
@@ -22,8 +30,25 @@ type Profile struct {
 	User              string   `yaml:"user,omitempty"`
 	Password          string   `yaml:"password,omitempty"`
 	SSHKey            string   `yaml:"ssh_key_file,omitempty"`
+	Auth              *SSHAuth `yaml:"auth,omitempty"`
 	ReconnectInterval int      `yaml:"reconnect_interval,omitempty"`
 	Tunnels           []Tunnel `yaml:"tunnels"`
+}
+
+// EffectiveAuth resolves the authentication configuration.
+// If the new Auth block is set, it takes precedence.
+// Otherwise falls back to legacy flat fields (password, ssh_key_file).
+func (p *Profile) EffectiveAuth() (authType, keyPath, passphrase, password string) {
+	if p.Auth != nil {
+		return p.Auth.Type, p.Auth.KeyPath, p.Auth.Passphrase, p.Auth.Password
+	}
+	if p.SSHKey != "" {
+		return "key", p.SSHKey, "", ""
+	}
+	if p.Password != "" {
+		return "password", "", "", p.Password
+	}
+	return "", "", "", ""
 }
 
 // ValidatePort checks if a port number is valid (1-65535).
@@ -84,6 +109,22 @@ func (p *Profile) ValidateProfile(name string) ValidationResult {
 		}
 	}
 
+	authType, keyPath, _, password := p.EffectiveAuth()
+
+	if p.Auth != nil {
+		if authType != "key" && authType != "password" {
+			result.Errors = append(result.Errors, fmt.Sprintf("auth.type must be \"key\" or \"password\", got %q", authType))
+		}
+		if authType == "password" && password == "" {
+			result.Errors = append(result.Errors, "auth.password is required when auth.type is \"password\"")
+		}
+		if authType == "key" && keyPath != "" {
+			if _, err := os.Stat(keyPath); os.IsNotExist(err) {
+				result.Warnings = append(result.Warnings, fmt.Sprintf("auth.key_path %q does not exist", keyPath))
+			}
+		}
+	}
+
 	if len(p.Tunnels) == 0 {
 		result.Warnings = append(result.Warnings, "profile has no tunnels configured")
 	}
@@ -111,13 +152,13 @@ func (p *Profile) ValidateProfile(name string) ValidationResult {
 		}
 	}
 
-	if p.Password != "" {
+	if p.Auth == nil && password != "" {
 		result.Warnings = append(result.Warnings, "profile uses password authentication (stored in plain text). Consider using ssh_key_file instead.")
 	}
 
-	if p.SSHKey != "" {
-		if _, err := os.Stat(p.SSHKey); os.IsNotExist(err) {
-			result.Warnings = append(result.Warnings, fmt.Sprintf("ssh_key_file %q does not exist", p.SSHKey))
+	if p.Auth == nil && keyPath != "" {
+		if _, err := os.Stat(keyPath); os.IsNotExist(err) {
+			result.Warnings = append(result.Warnings, fmt.Sprintf("ssh_key_file %q does not exist", keyPath))
 		}
 	}
 

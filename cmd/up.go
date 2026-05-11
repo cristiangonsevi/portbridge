@@ -9,12 +9,12 @@ import (
 
 	"portbridge/internal/config"
 	"portbridge/internal/tunnel"
+	tunnelssh "portbridge/internal/tunnel/ssh"
 	"portbridge/internal/ui"
 
 	"github.com/spf13/cobra"
 )
 
-// upCmd starts tunnels for a given profile
 var upCmd = &cobra.Command{
 	Use:   "up [profile]",
 	Short: "Start tunnels for a profile",
@@ -59,6 +59,13 @@ var upCmd = &cobra.Command{
 			}
 		}
 
+		sshClient, err := tunnelssh.NewClient(&profile)
+		if err != nil {
+			ui.PrintError("Failed to create SSH client: " + err.Error())
+			return
+		}
+		defer sshClient.Close()
+
 		for _, t := range profile.Tunnels {
 			if !t.Enabled {
 				ui.PrintWarning("Tunnel " + t.Name + " is disabled")
@@ -83,8 +90,7 @@ var upCmd = &cobra.Command{
 				RemotePort: t.Remote,
 			}
 
-			sshCmd := tunnel.BuildSSHCommand(profile.SSHAlias, profile.User, profile.Host, profile.Password, profile.Port, t.Local, t.Remote)
-			result, err := manager.StartTunnel(record, sshCmd)
+			result, err := manager.StartSSHTunnel(record, sshClient.UnderlyingClient(), t.Local, t.Remote)
 			if err != nil {
 				ui.PrintError("Failed to start tunnel " + t.Name + ": " + err.Error())
 				continue

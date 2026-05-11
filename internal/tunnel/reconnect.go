@@ -6,6 +6,7 @@ import (
 
 	"portbridge/internal/config"
 	"portbridge/internal/ui"
+	tunnelssh "portbridge/internal/tunnel/ssh"
 )
 
 // ReconnectManager handles auto-reconnection of tunnels.
@@ -76,10 +77,16 @@ func (rm *ReconnectManager) checkAndRestartTunnels() {
 			}
 
 			if pid > 0 {
-				continue // tunnel is still active
+				continue
 			}
 
 			ui.PrintWarning(fmt.Sprintf("Reconnect: tunnel %s/%s is down, restarting...", profileName, t.Name))
+
+			sshClient, err := tunnelssh.NewClient(&profile)
+			if err != nil {
+				ui.PrintError(fmt.Sprintf("Reconnect: failed to create SSH client for %s/%s: %v", profileName, t.Name, err))
+				continue
+			}
 
 			record := TunnelRecord{
 				Profile:    profileName,
@@ -92,8 +99,8 @@ func (rm *ReconnectManager) checkAndRestartTunnels() {
 				RemotePort: t.Remote,
 			}
 
-			sshCmd := BuildSSHCommand(profile.SSHAlias, profile.User, profile.Host, profile.Password, profile.Port, t.Local, t.Remote)
-			_, err = rm.manager.StartTunnel(record, sshCmd)
+			_, err = rm.manager.StartSSHTunnel(record, sshClient.UnderlyingClient(), t.Local, t.Remote)
+			sshClient.Close()
 			if err != nil {
 				ui.PrintError(fmt.Sprintf("Reconnect: failed to restart tunnel %s/%s: %v", profileName, t.Name, err))
 			} else {

@@ -3,6 +3,8 @@ package tunnel
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"net"
 	"os"
 	"os/exec"
 	"regexp"
@@ -11,6 +13,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"golang.org/x/crypto/ssh"
 
 	"portbridge/internal/config"
 	"portbridge/internal/ui"
@@ -477,6 +481,195 @@ func (tm *TunnelManager) StartTunnel(record TunnelRecord, cmd *exec.Cmd) (string
 	_ = terminatePID(cmd.Process.Pid)
 	tm.mutex.Unlock()
 	return "", fmt.Errorf("tunnel %s did not open local port %d in time", record.Name, record.LocalPort)
+}
+
+// StartSSHTunnel starts a tunnel using a native SSH client with port forwarding.
+// It takes ownership of the sshClient and will close it when the tunnel is stopped.
+func (tm *TunnelManager) StartSSHTunnel(record TunnelRecord, sshClient *ssh.Client, localPort, remotePort int) (string, error) {
+	tm.mutex.Lock()
+	state, err := tm.loadState()
+	if err != nil {
+		tm.mutex.Unlock()
+		return "", err
+	}
+
+	changed, err := tm.cleanupStaleLocked(state)
+	if err != nil {
+		tm.mutex.Unlock()
+		return "", err
+	}
+
+	key := record.Key()
+
+	if existing, exists := state.Tunnels[key]; exists {
+		if existing.SameConfig(record) {
+			activePID, err := findActiveSSHPIDForPort(record.LocalPort)
+			if err != nil {
+				tm.mutex.Unlock()
+				return "", err
+			}
+
+			if activePID > 0 {
+				sshClient.Close()
+				if existing.PID != activePID {
+					existing.PID = activePID
+					state.Tunnels[key] = existing
+					changed = true
+				}
+				if changed {
+					if err := tm.saveState(state); err != nil {
+						tm.mutex.Unlock()
+						return "", err
+					}
+				}
+				tm.mutex.Unlock()
+				return "already-running", nil
+			}
+
+			delete(state.Tunnels, key)
+			changed = true
+		} else {
+			sshClient.Close()
+			tm.mutex.Unlock()
+			return "", fmt.Errorf("tunnel %s config changed but SSH client is already running; use stop first", record.Name)
+		}
+	}
+
+	pid, processName, err := findListeningProcessByPort(localPort)
+	if err != nil {
+		sshClient.Close()
+		tm.mutex.Unlock()
+		return "", err
+	}
+
+	if pid > 0 {
+		sshClient.Close()
+		tm.mutex.Unlock()
+		return "", fmt.Errorf("local port %d is already in use by %s (pid %d)", localPort, processName, pid)
+	}
+
+	client := &nativeSSHTunnel{
+		client:     sshClient,
+		forwardCh:  make(chan *ssh.Client, 10),
+		closeCh:    make(chan struct{}),
+		forwardDone: make(chan struct{}),
+	}
+
+	go client.handlePortForwarding(localPort, remotePort)
+
+	select {
+	case <-client.forwardCh:
+	case <-time.After(5 * time.Second):
+		sshClient.Close()
+		tm.mutex.Unlock()
+		return "", fmt.Errorf("tunnel %s did not open local port %d in time", record.Name, localPort)
+	case <-client.closeCh:
+		sshClient.Close()
+		tm.mutex.Unlock()
+		return "", fmt.Errorf("tunnel %s failed to start", record.Name)
+	}
+
+	pid = syscall.Getpid()
+	record.PID = pid
+	state.Tunnels[key] = record
+
+	if err := tm.saveState(state); err != nil {
+		tm.mutex.Unlock()
+		return "", err
+	}
+	tm.mutex.Unlock()
+
+	ui.PrintLog(fmt.Sprintf("Tunnel %s started with PID %d", record.Name, pid))
+	return "started", nil
+}
+
+type nativeSSHTunnel struct {
+	client     *ssh.Client
+	forwardCh  chan *ssh.Client
+	closeCh    chan struct{}
+	forwardDone chan struct{}
+}
+
+func (t *nativeSSHTunnel) handlePortForwarding(localPort, remotePort int) {
+	defer close(t.forwardDone)
+
+	listener, err := t.client.ListenTCP(&net.TCPAddr{Port: 0})
+	if err != nil {
+		close(t.closeCh)
+		return
+	}
+
+	localAddr := listener.Addr().(*net.TCPAddr)
+	if localAddr.Port == localPort {
+		t.forwardCh <- t.client
+		go t.acceptConnections(listener, remotePort)
+		return
+	}
+
+	l, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", localPort))
+	if err != nil {
+		listener.Close()
+		close(t.closeCh)
+		return
+	}
+
+	go func() {
+		defer l.Close()
+		defer listener.Close()
+		for {
+			conn, err := l.Accept()
+			if err != nil {
+				return
+			}
+			go t.handleProxyConn(conn, listener, remotePort)
+		}
+	}()
+
+	t.forwardCh <- t.client
+}
+
+func (t *nativeSSHTunnel) handleProxyConn(conn net.Conn, listener net.Listener, remotePort int) {
+	defer conn.Close()
+
+	remote, err := t.client.Dial("tcp", fmt.Sprintf("localhost:%d", remotePort))
+	if err != nil {
+		return
+	}
+	defer remote.Close()
+
+	go io.Copy(remote, conn)
+	go io.Copy(conn, remote)
+}
+
+func (t *nativeSSHTunnel) acceptConnections(listener net.Listener, remotePort int) {
+	defer listener.Close()
+
+	for {
+		conn, err := listener.Accept()
+		if err != nil {
+			select {
+			case <-t.closeCh:
+				return
+			default:
+				continue
+			}
+		}
+
+		go t.handleConn(conn, remotePort)
+	}
+}
+
+func (t *nativeSSHTunnel) handleConn(conn net.Conn, remotePort int) {
+	defer conn.Close()
+
+	remote, err := t.client.Dial("tcp", fmt.Sprintf("localhost:%d", remotePort))
+	if err != nil {
+		return
+	}
+	defer remote.Close()
+
+	go io.Copy(remote, conn)
+	go io.Copy(conn, remote)
 }
 
 // StopTunnel stops a running tunnel by profile and tunnel name.
