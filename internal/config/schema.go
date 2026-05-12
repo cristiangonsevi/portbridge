@@ -22,25 +22,51 @@ type SSHAuth struct {
 	Password   string `yaml:"password,omitempty"`   // password for password auth
 }
 
+// SSHConfig represents the nested SSH block (like Orbit's format).
+type SSHConfig struct {
+	Alias  string   `yaml:"alias,omitempty"`
+	Host   string   `yaml:"host,omitempty"`
+	User   string   `yaml:"user,omitempty"`
+	Port   int      `yaml:"port,omitempty"`
+	Auth   *SSHAuth `yaml:"auth,omitempty"`
+}
+
 // Profile represents a profile configuration
 type Profile struct {
-	SSHAlias          string   `yaml:"ssh_alias,omitempty"`
-	Host              string   `yaml:"host,omitempty"`
-	Port              int      `yaml:"port,omitempty"`
-	User              string   `yaml:"user,omitempty"`
-	Password          string   `yaml:"password,omitempty"`
-	SSHKey            string   `yaml:"ssh_key_file,omitempty"`
-	Auth              *SSHAuth `yaml:"auth,omitempty"`
-	ReconnectInterval int      `yaml:"reconnect_interval,omitempty"`
-	Tunnels           []Tunnel `yaml:"tunnels"`
+	SSH               *SSHConfig `yaml:"ssh,omitempty"`              // nested SSH config (Orbit-style)
+	SSHAlias          string     `yaml:"ssh_alias,omitempty"`        // legacy flat ssh_alias
+	Host              string     `yaml:"host,omitempty"`             // legacy flat host
+	Port              int        `yaml:"port,omitempty"`             // legacy flat port
+	User              string     `yaml:"user,omitempty"`              // legacy flat user
+	Password          string     `yaml:"password,omitempty"`          // legacy flat password
+	SSHKey            string     `yaml:"ssh_key_file,omitempty"`     // legacy flat ssh_key_file
+	Auth              *SSHAuth   `yaml:"auth,omitempty"`              // legacy flat auth
+	ReconnectInterval int        `yaml:"reconnect_interval,omitempty"`
+	Tunnels           []Tunnel   `yaml:"tunnels"`
+}
+
+// EffectiveSSH returns the effective SSH configuration, using the nested
+// ssh block if present, otherwise falling back to legacy flat fields.
+func (p *Profile) EffectiveSSH() SSHConfig {
+	if p.SSH != nil {
+		return *p.SSH
+	}
+	return SSHConfig{
+		Alias:  p.SSHAlias,
+		Host:   p.Host,
+		User:   p.User,
+		Port:   p.Port,
+		Auth:   p.Auth,
+	}
 }
 
 // EffectiveAuth resolves the authentication configuration.
-// If the new Auth block is set, it takes precedence.
+// If the nested ssh.auth or legacy auth is set, it takes precedence.
 // Otherwise falls back to legacy flat fields (password, ssh_key_file).
 func (p *Profile) EffectiveAuth() (authType, keyPath, passphrase, password string) {
-	if p.Auth != nil {
-		return p.Auth.Type, p.Auth.KeyPath, p.Auth.Passphrase, p.Auth.Password
+	sshCfg := p.EffectiveSSH()
+	if sshCfg.Auth != nil {
+		return sshCfg.Auth.Type, sshCfg.Auth.KeyPath, sshCfg.Auth.Passphrase, sshCfg.Auth.Password
 	}
 	if p.SSHKey != "" {
 		return "key", p.SSHKey, "", ""
