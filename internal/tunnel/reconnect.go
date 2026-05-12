@@ -2,6 +2,7 @@ package tunnel
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	"portbridge/internal/config"
@@ -60,14 +61,21 @@ func (rm *ReconnectManager) checkAndRestartTunnels() {
 	}
 
 	for profileName, profile := range *cfg {
-		interval := profile.ReconnectInterval
-		if interval <= 0 {
-			interval = 30
-		}
+		sshCfg := profile.EffectiveSSH()
 
 		for _, t := range profile.Tunnels {
 			if !t.Enabled {
 				continue
+			}
+
+			if sshCfg.Alias == "" && sshCfg.Host == "" {
+				continue
+			}
+
+			if sshCfg.Alias != "" {
+				if !isProfileManaged(sshCfg.Alias) {
+					continue
+				}
 			}
 
 			pid, err := rm.manager.FindActiveTunnelPID(t.Local)
@@ -91,10 +99,10 @@ func (rm *ReconnectManager) checkAndRestartTunnels() {
 			record := TunnelRecord{
 				Profile:    profileName,
 				Name:       t.Name,
-				SSHAlias:   profile.SSHAlias,
-				Host:       profile.Host,
-				User:       profile.User,
-				Port:       profile.Port,
+				SSHAlias:   sshCfg.Alias,
+				Host:       sshCfg.Host,
+				User:       sshCfg.User,
+				Port:       sshCfg.Port,
 				LocalPort:  t.Local,
 				RemotePort: t.Remote,
 			}
@@ -108,4 +116,24 @@ func (rm *ReconnectManager) checkAndRestartTunnels() {
 			}
 		}
 	}
+}
+
+func isProfileManaged(alias string) bool {
+	managedProfilesMu.Lock()
+	defer managedProfilesMu.Unlock()
+	for _, m := range managedProfiles {
+		if m == alias {
+			return true
+		}
+	}
+	return false
+}
+
+var managedProfiles []string
+var managedProfilesMu sync.Mutex
+
+func MarkProfileManaged(alias string) {
+	managedProfilesMu.Lock()
+	defer managedProfilesMu.Unlock()
+	managedProfiles = append(managedProfiles, alias)
 }

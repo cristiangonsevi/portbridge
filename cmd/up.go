@@ -66,15 +66,20 @@ var upCmd = &cobra.Command{
 		}
 		defer sshClient.Close()
 
+		sshCfg := profile.EffectiveSSH()
+		if sshCfg.Alias != "" {
+			tunnel.MarkProfileManaged(sshCfg.Alias)
+		}
+
 		for _, t := range profile.Tunnels {
 			if !t.Enabled {
 				ui.PrintWarning("Tunnel " + t.Name + " is disabled")
 				continue
 			}
 
-			target := profile.Host
-			if profile.SSHAlias != "" {
-				target = profile.SSHAlias
+			target := sshCfg.Host
+			if sshCfg.Alias != "" {
+				target = sshCfg.Alias
 			}
 
 			ui.PrintLog(fmt.Sprintf("Opening tunnel %s: localhost:%d -> %s:%d", t.Name, t.Local, target, t.Remote))
@@ -82,10 +87,10 @@ var upCmd = &cobra.Command{
 			record := tunnel.TunnelRecord{
 				Profile:    profileName,
 				Name:       t.Name,
-				SSHAlias:   profile.SSHAlias,
-				Host:       profile.Host,
-				User:       profile.User,
-				Port:       profile.Port,
+				SSHAlias:   sshCfg.Alias,
+				Host:       sshCfg.Host,
+				User:       sshCfg.User,
+				Port:       sshCfg.Port,
 				LocalPort:  t.Local,
 				RemotePort: t.Remote,
 			}

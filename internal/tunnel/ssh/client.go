@@ -33,18 +33,13 @@ func NewClient(cfg *config.Profile) (*Client, error) {
 
 	sshCfg := cfg.EffectiveSSH()
 
-	fmt.Printf("[DEBUG] NewClient: SSHAlias=%q Host=%q User=%q\n", sshCfg.Alias, sshCfg.Host, sshCfg.User)
-	fmt.Printf("[DEBUG] NewClient: Auth=%+v\n", sshCfg.Auth)
-
 	host := sshCfg.Host
 	user := sshCfg.User
 
 	if host == "" && sshCfg.Alias != "" {
 		aliasInfo, err := resolveSSHAlias(sshCfg.Alias)
 		if err != nil {
-			fmt.Printf("[DEBUG] resolveSSHAlias error: %v\n", err)
 		} else {
-			fmt.Printf("[DEBUG] resolved alias: hostname=%q identityFile=%q user=%q\n", aliasInfo.hostname, aliasInfo.identityFile, aliasInfo.user)
 			resolvedUser = aliasInfo.user
 		}
 		host = aliasInfo.hostname
@@ -52,11 +47,9 @@ func NewClient(cfg *config.Profile) (*Client, error) {
 	}
 
 	authType, keyPath, passphrase, password := cfg.EffectiveAuth()
-	fmt.Printf("[DEBUG] EffectiveAuth: type=%q keyPath=%q passphrase=%q password=%q\n", authType, keyPath, passphrase, password != "")
 
 	if keyPath == "" && resolvedKeyPath != "" {
 		keyPath = resolvedKeyPath
-		fmt.Printf("[DEBUG] keyPath resolved from SSH config: %q\n", keyPath)
 	}
 
 	sshClientCfg, err := buildSSHClientConfig(user, authType, keyPath, passphrase, password)
@@ -68,7 +61,6 @@ func NewClient(cfg *config.Profile) (*Client, error) {
 		sshClientCfg.User = user
 		if sshClientCfg.User == "" && resolvedUser != "" {
 			sshClientCfg.User = resolvedUser
-			fmt.Printf("[DEBUG] using user=%q from SSH config\n", resolvedUser)
 		}
 	}
 
@@ -76,8 +68,6 @@ func NewClient(cfg *config.Profile) (*Client, error) {
 	if sshCfg.Port == 0 {
 		addr = net.JoinHostPort(host, "22")
 	}
-
-	fmt.Printf("[DEBUG] Final SSH config: user=%q addr=%s\n", sshClientCfg.User, addr)
 
 	conn, err := ssh.Dial("tcp", addr, sshClientCfg)
 	if err != nil {

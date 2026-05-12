@@ -593,83 +593,60 @@ type nativeSSHTunnel struct {
 func (t *nativeSSHTunnel) handlePortForwarding(localPort, remotePort int) {
 	defer close(t.forwardDone)
 
-	listener, err := t.client.ListenTCP(&net.TCPAddr{Port: 0})
-	if err != nil {
-		close(t.closeCh)
-		return
-	}
-
-	localAddr := listener.Addr().(*net.TCPAddr)
-	if localAddr.Port == localPort {
-		t.forwardCh <- t.client
-		go t.acceptConnections(listener, remotePort)
-		return
-	}
-
 	l, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", localPort))
 	if err != nil {
-		listener.Close()
 		close(t.closeCh)
 		return
 	}
 
 	go func() {
 		defer l.Close()
-		defer listener.Close()
 		for {
 			conn, err := l.Accept()
 			if err != nil {
-				return
+				ui.PrintError(fmt.Sprintf("handlePortForwarding: accept error - %v", err))
+				select {
+				case <-t.closeCh:
+					return
+				default:
+					continue
+				}
 			}
-			go t.handleProxyConn(conn, listener, remotePort)
+			ui.PrintLog(fmt.Sprintf("handlePortForwarding: connection received from %v", conn.RemoteAddr()))
+			go t.handleLocalConn(conn, remotePort)
 		}
 	}()
 
 	t.forwardCh <- t.client
 }
 
-func (t *nativeSSHTunnel) handleProxyConn(conn net.Conn, listener net.Listener, remotePort int) {
+func (t *nativeSSHTunnel) handleLocalConn(conn net.Conn, remotePort int) {
 	defer conn.Close()
 
+	fmt.Printf("[DEBUG] handleLocalConn: dialing localhost:%d\n", remotePort)
 	remote, err := t.client.Dial("tcp", fmt.Sprintf("localhost:%d", remotePort))
 	if err != nil {
+		ui.PrintError(fmt.Sprintf("handleLocalConn: failed to dial remote localhost:%d - %v", remotePort, err))
 		return
 	}
 	defer remote.Close()
 
-	go io.Copy(remote, conn)
-	go io.Copy(conn, remote)
-}
+	fmt.Printf("[DEBUG] handleLocalConn: connection established\n")
 
-func (t *nativeSSHTunnel) acceptConnections(listener net.Listener, remotePort int) {
-	defer listener.Close()
-
-	for {
-		conn, err := listener.Accept()
-		if err != nil {
-			select {
-			case <-t.closeCh:
-				return
-			default:
-				continue
-			}
-		}
-
-		go t.handleConn(conn, remotePort)
-	}
-}
-
-func (t *nativeSSHTunnel) handleConn(conn net.Conn, remotePort int) {
-	defer conn.Close()
-
-	remote, err := t.client.Dial("tcp", fmt.Sprintf("localhost:%d", remotePort))
-	if err != nil {
-		return
-	}
-	defer remote.Close()
-
-	go io.Copy(remote, conn)
-	go io.Copy(conn, remote)
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		n, err := io.Copy(remote, conn)
+		fmt.Printf("[DEBUG] handleLocalConn: client->remote copy finished, %d bytes, err=%v\n", n, err)
+	}()
+	go func() {
+		defer wg.Done()
+		n, err := io.Copy(conn, remote)
+		fmt.Printf("[DEBUG] handleLocalConn: remote->client copy finished, %d bytes, err=%v\n", n, err)
+	}()
+	wg.Wait()
+	fmt.Printf("[DEBUG] handleLocalConn: both copy goroutines finished\n")
 }
 
 // StopTunnel stops a running tunnel by profile and tunnel name.
